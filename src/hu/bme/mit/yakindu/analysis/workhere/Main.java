@@ -1,17 +1,28 @@
 package hu.bme.mit.yakindu.analysis.workhere;
 
 import java.awt.List;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.ecore.EObject;
 import org.junit.Test;
 import org.yakindu.sct.model.sgraph.Region;
+import org.yakindu.sct.model.sgraph.Scope;
 import org.yakindu.sct.model.sgraph.State;
 import org.yakindu.sct.model.sgraph.Statechart;
+import org.yakindu.sct.model.sgraph.Transition;
 import org.yakindu.sct.model.sgraph.Vertex;
+import org.yakindu.sct.model.stext.stext.EventDefinition;
+import org.yakindu.sct.model.stext.stext.VariableDefinition;
 
 import hu.bme.mit.model2gml.Model2GML;
+import hu.bme.mit.yakindu.analysis.RuntimeService;
+import hu.bme.mit.yakindu.analysis.TimerService;
+import hu.bme.mit.yakindu.analysis.example.ExampleStatemachine;
+import hu.bme.mit.yakindu.analysis.example.IExampleStatemachine;
 import hu.bme.mit.yakindu.analysis.modelmanager.ModelManager;
 
 public class Main {
@@ -46,6 +57,7 @@ public class Main {
 				}
 			}			
 		}
+		
 		System.out.println();
 		int n = 0;
 		for(Region r : s.getRegions()) {
@@ -68,20 +80,123 @@ public class Main {
 
 		
 		TreeIterator<EObject> iterator = s.eAllContents();	
-		State prevState = null;		
+		
 		while (iterator.hasNext()) {
 			
 			EObject content = iterator.next();
 			
 			if(content instanceof State) {
-				State state = (State) content;
-				if(prevState != null) {
-					System.out.print(" "+prevState.getName()+" -> "+state.getName()+"\n");					
-				}
-				prevState = state;
+				State state = (State) content;				
 				System.out.print(state.getName());
+				EList<Transition> t = state.getOutgoingTransitions();
+				for(int i = 0; i< t.size(); i++) {
+					Vertex v = t.get(i).getTarget();
+					if(v instanceof State) {
+						State s2 = (State)v;
+						System.out.print("  "+ state.getName() + "->" + s2.getName());
+					}
+				}
+				System.out.println();
 			}
 		}
+		
+		System.out.println();
+		System.out.println();
+		EList<Scope> scopes = s.getScopes();
+		for(int i = 0; i<scopes.size();i++) {
+			EList<EObject> content = scopes.get(i).getMembers();
+			for(int j = 0; j< content.size();j++) {
+				if(content.get(j) instanceof EventDefinition) {
+					EventDefinition ed = (EventDefinition) content.get(j);
+					System.out.println(ed.getName());
+				}
+				if(content.get(j) instanceof VariableDefinition) {
+					VariableDefinition ed = (VariableDefinition) content.get(j);
+					System.out.println(ed.getName());
+				}
+					
+			}
+		}
+		
+		
+		System.out.println();
+		System.out.println();
+		
+		
+		
+		scopes = s.getScopes();
+		ArrayList<String> stateNames = new ArrayList<String>();
+		ArrayList<String> eventNames = new ArrayList<String>();
+		scopes = s.getScopes();
+		for(int i = 0; i<scopes.size();i++) {
+			EList<EObject> content = scopes.get(i).getMembers();
+			for(int j = 0; j< content.size();j++) {
+				if(content.get(j) instanceof EventDefinition) {
+					EventDefinition ed = (EventDefinition) content.get(j);					
+					eventNames.add(ed.getName());
+				}
+				if(content.get(j) instanceof VariableDefinition) {
+					VariableDefinition vd = (VariableDefinition) content.get(j);
+					stateNames.add(vd.getName());
+				}
+					
+			}
+		}		
+		System.out.println("public static void print(IExampleStateMachine s) {");
+		for(int i = 0; i< stateNames.size() ; i++ ){
+			String name = stateNames.get(i);
+			String upperName = name.substring(0,1).toUpperCase()+name.substring(1,name.length());
+			System.out.println("System.out.println(\""+upperName.substring(0,1)+" = \" + s.getSCInterface().get"+upperName+"());");
+		}	
+		System.out.println("}");
+		
+		
+		
+		
+		System.out.println();
+		System.out.println();
+		
+		
+		
+		
+		
+		
+		System.out.println( "public static void main(String[] args) throws IOException {\n" + 
+				"	ExampleStatemachine s = new ExampleStatemachine();\r\n" + 
+				"	s.setTimer(new TimerService());\r\n" + 
+				"	RuntimeService.getInstance().registerStatemachine(s, 200);\n" + 
+				"	s.init(); \n" + 
+				"	s.enter();\n" + 
+				"	s.runCycle();\n" + 				 
+				"	BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));\n" + 
+				"	while(true) {\n" + 
+				"		String line = reader.readLine();	"); 
+				for(int i = 0; i< eventNames.size();i++) {
+					String name = eventNames.get(i);
+					String upperName = name.substring(0,1).toUpperCase()+name.substring(1,name.length());
+					System.out.println(
+					"		if(line.equals(\""+name+"\")) {\n" + 
+					"			s.raise"+upperName+"();\n" + 
+					"			s.runCycle();\n" + 
+					"			print(s);\n" + 
+					"		}"
+					);
+				}				
+				System.out.println(
+				"		if(line.equals(\"exit\")) {\n" + 
+				"			print(s);\n" + 
+				"			System.exit(0);\n" + 
+				"		}\n" + 
+				"	}\n" + 
+				"}\n"); 
+		
+				System.out.println("public static void print(IExampleStatemachine s) {"); 
+				for(int i = 0; i< stateNames.size() ; i++ ){
+					String name = stateNames.get(i);
+					String upperName = name.substring(0,1).toUpperCase()+name.substring(1,name.length());
+					System.out.println("	System.out.println(\""+upperName.substring(0,1)+" = \" + s.getSCInterface().get"+upperName+"());");
+				}				 
+				System.out.println("}");
 		
 		
 		// Transforming the model into a graph representation
